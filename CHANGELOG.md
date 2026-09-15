@@ -4,6 +4,13 @@
 
 First release. Honcho memory for DeepSeek Harness, as a native Cordis plugin.
 
+**Telemetry.** Every Honcho request now carries `X-Honcho-Host` (`dsh/<harness version> (<platform>)`),
+`X-Honcho-Plugin` (`dsh-honcho/<version>`), and `X-Honcho-Agent-Model` (`<provider>/<model>`, once a model
+has answered). The harness version is read off the installation — dsh exposes it to a plugin nowhere else —
+and the model from the durable session log, so a mid-session switch is reflected on the next request.
+`/honcho` shows the identity as a `client` line. Formatting comes from `@honcho-ai/harness-plugin-core`
+0.1.1, the first release a Node-hosted plugin can import.
+
 **Packaging.** `main` and the `.` export now point at a committed root `index.js` that forwards to
 the build in `lib/`, so catalogs that verify a plugin from its git tree can resolve the entry.
 

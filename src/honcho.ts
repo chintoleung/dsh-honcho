@@ -10,6 +10,7 @@
 
 import { Honcho, type Peer, type Session } from "@honcho-ai/sdk";
 import { clientOptions, sessionName, type ResolvedConfig } from "./core-shim.js";
+import { setTelemetryHeaders, telemetryHeaders, telemetryIdentity, type TelemetryOverrides } from "./telemetry.js";
 import type { HonchoGateway } from "./tools.js";
 import type { CapturedMessage } from "./capture.js";
 import type { SessionContextResult } from "./memory.js";
@@ -31,7 +32,13 @@ export interface Gateway extends HonchoGateway {
   upload(sessionName: string, messages: CapturedMessage[]): Promise<void>;
 }
 
-export function createGateway(config: ResolvedConfig): Gateway {
+/**
+ * @param telemetry - the identity fields only a running session knows (harness
+ *   version, current model), read fresh on every client access rather than
+ *   captured once: the model changes mid-session and the first requests are
+ *   made before any model has answered.
+ */
+export function createGateway(config: ResolvedConfig, telemetry: () => TelemetryOverrides = () => ({})): Gateway {
   const directional = config.observationMode === "directional";
   const ensured = new Set<string>();
 
@@ -42,8 +49,16 @@ export function createGateway(config: ResolvedConfig): Gateway {
    */
   let honcho: Honcho | undefined;
   const client = async (): Promise<Honcho> => {
-    if (honcho) return honcho;
-    const fresh = new Honcho(clientOptions(config));
+    const identity = telemetryIdentity(telemetry());
+    // The SDK reads `defaultHeaders` per request, so merging the current
+    // identity into the held client's map is enough for the next request to
+    // carry it — this is the only seam a held client has for a value that
+    // changes mid-session.
+    if (honcho) {
+      setTelemetryHeaders(honcho.http.defaultHeaders, identity);
+      return honcho;
+    }
+    const fresh = new Honcho({ ...clientOptions(config), defaultHeaders: telemetryHeaders(identity) });
     await fresh.peer(config.peerName);
     return (honcho = fresh);
   };

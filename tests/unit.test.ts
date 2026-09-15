@@ -578,6 +578,7 @@ describe("redactSecrets", () => {
 // ── regressions from the first live run (DEV-2537) ────────────────────────
 
 import { createCommand } from "../src/commands.ts";
+import { telemetryIdentity } from "../src/telemetry.ts";
 import { createCapture } from "../src/capture.ts";
 
 test("/honcho results carry the `kind` dsh's registry requires", async () => {
@@ -586,6 +587,7 @@ test("/honcho results carry the `kind` dsh's registry requires", async () => {
   const command = createCommand(config, {
     capture: noop, sessionNameFor: () => "s", cwdOf: noop, lastFetchAt: noop, lastFetchError: noop,
     injectionActive: () => true, injectionSuppressed: () => false, configFile: () => "",
+    telemetry: () => telemetryIdentity(),
   });
   for (const input of ["", "config", "flush"]) expect((await command.handler({ agent: {}, rawInput: input })).kind).toBe("success");
   expect((await command.handler({ agent: {}, rawInput: "bogus" })).kind).toBe("error");
