@@ -10,6 +10,7 @@
 import type { CommandResult } from "@deepseek-ai/dsh-commands/types";
 
 import { sessionUrl, unsupportedComponents, type ResolvedConfig } from "./core-shim.js";
+import { hostHeaderValue, pluginHeaderValue, type TelemetryIdentity } from "./telemetry.js";
 import type { Capture } from "./capture.js";
 
 // dsh's registry rejects results without a `kind` discriminator.
@@ -32,6 +33,8 @@ export interface CommandDeps {
   injectionSuppressed(): boolean;
   /** Path the shared config file was read from. */
   configFile(): string;
+  /** The identity every Honcho request is carrying right now. */
+  telemetry(): TelemetryIdentity;
 }
 
 /** Capture can be configured on but not yet wired, so report the difference
@@ -49,6 +52,13 @@ function ago(at: number | undefined): string {
   if (seconds < 60) return `${seconds}s ago`;
   if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
   return `${Math.round(seconds / 3600)}h ago`;
+}
+
+/** The three telemetry header values, as one line; `?` for what is not known. */
+function clientIdentity(identity: TelemetryIdentity): string {
+  const parts = [hostHeaderValue(identity) ?? "?", pluginHeaderValue(identity) ?? "?"];
+  if (identity.model) parts.push(identity.model);
+  return parts.join(" · ");
 }
 
 export interface CommandDefinition {
@@ -112,6 +122,7 @@ export function createCommand(config: ResolvedConfig, deps: CommandDeps): Comman
         `strategy     ${config.sessionStrategy}`,
         `capture      ${captureStatus(config, deps.capture())}`,
         `injection    ${deps.injectionActive() ? "active" : "inactive"} · last fetch ${ago(deps.lastFetchAt())}`,
+        `client       ${clientIdentity(deps.telemetry())}`,
       ];
       if (deps.injectionSuppressed()) {
         lines.push("⚠ runtime context is suppressed by this composition — injected memory is not reaching the model");

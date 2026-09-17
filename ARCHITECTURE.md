@@ -271,6 +271,42 @@ into the `tool.call.toolview` slot (`docs/cookbook/adding-a-tool.md`).
 
 ---
 
+## Telemetry
+
+Every Honcho request carries three headers, so a workspace can tell which integration and which harness
+version produced its data:
+
+| Header | Value | Where dsh exposes it |
+|---|---|---|
+| `X-Honcho-Host` | `dsh/0.1.5-rc.1 (darwin)` | Nowhere, directly. dsh's CLI reads its own `package.json` only to answer `--version`, and passes nothing to the plugin context, the environment, or the session log. The version is read back off the installation instead: `@deepseek-ai/dsh/package.json`, resolvable because `healProfilesModuleFallback()` symlinks the installation closure into `$DSH_HOME/profiles/node_modules`, which is on a plugin's resolution path. `@deepseek-ai/dsh-session` (lockstep-versioned) is the fallback for a packaged executable, which writes ESM proxies and skips a package with no importable entry. |
+| `X-Honcho-Plugin` | `dsh-honcho/0.1.0` | This package's own `package.json`, read lazily and guarded so a bad relative path cannot stop the plugin loading. |
+| `X-Honcho-Agent-Model` | `deepseek/deepseek-chat` | Durable session events: `assistant/message` carries the provenance of what the model actually produced, `request/header` names the configured model one request earlier and on every mid-session switch. Absent until one of them has been seen, and absent again on a turn for a session that has not. |
+
+The client is held across turns, so the model cannot be baked in at construction. `createGateway` takes an
+identity accessor and updates `honcho.http.defaultHeaders` on every client access; the SDK reads that map per
+request. Host and plugin are formatted once and memoized on resolution — not on a miss, since the version can
+be unresolvable until dsh has booted. The model is the only value that moves, so it is written or **deleted**
+rather than merged: core's merge cannot say "this session has not answered yet", and an omitted field would
+strand the previous model on the held client. Model is tracked per dsh session, because global `session/event`
+listeners see subagent sessions too and `agent/pre-step` is unscoped — the reported model belongs to the
+session whose turn is being served.
+
+The delete is defensive rather than a fix for an observed symptom: on dsh 0.1.5 it could not be provoked,
+because `request/header` is appended *before dispatch* and so lands ahead of every Honcho call made during
+that session's turn (VM, 2026-09-17, subagent on its own model with `injection.cadence.ttlSeconds: 0`).
+
+Nothing reads these headers back, so a wrong value is invisible in normal operation. `/honcho` prints the
+identity as a `client` line for exactly that reason.
+
+The header formatting comes from `@honcho-ai/harness-plugin-core` and is re-exported through
+`src/telemetry.ts`, so the plugin has one telemetry import and every integration sends byte-identical values.
+Requires core **0.1.1 or newer**: 0.1.0 shipped raw TypeScript as its entry, which Node refuses to load from
+`node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`) — a Node-hosted plugin cannot depend on it.
+Core also exports config resolution, which this plugin does not use yet; that swap belongs with deleting
+`core-shim.ts`.
+
+---
+
 ## Layout
 
 ```
@@ -282,6 +318,7 @@ src/capture.ts     source filter, cursor, debounce, flush
 src/redact.ts      ported from claude-honcho
 src/tools.ts       three tools
 src/commands.ts    /honcho, /honcho config, /honcho flush
+src/telemetry.ts   client identity headers: core's formatting, dsh's version and model sources
 src/git.ts         branch + repo root for session naming (core's job eventually)
 ```
 

@@ -10,6 +10,7 @@
 
 import { Honcho, type Peer, type Session } from "@honcho-ai/sdk";
 import { clientOptions, sessionName, type ResolvedConfig } from "./core-shim.js";
+import { HEADER_AGENT_MODEL, telemetryHeaders, telemetryIdentity, type TelemetryOverrides } from "./telemetry.js";
 import type { HonchoGateway } from "./tools.js";
 import type { CapturedMessage } from "./capture.js";
 import type { SessionContextResult } from "./memory.js";
@@ -31,9 +32,32 @@ export interface Gateway extends HonchoGateway {
   upload(sessionName: string, messages: CapturedMessage[]): Promise<void>;
 }
 
-export function createGateway(config: ResolvedConfig): Gateway {
+/**
+ * @param telemetry - the identity fields only a running session knows (harness
+ *   version, current model), read fresh on every client access rather than
+ *   captured once: the model changes mid-session and the first requests are
+ *   made before any model has answered.
+ */
+export function createGateway(config: ResolvedConfig, telemetry: () => TelemetryOverrides = () => ({})): Gateway {
   const directional = config.observationMode === "directional";
   const ensured = new Set<string>();
+
+  /** Host and plugin, formatted once. Memoized on resolution only: the harness
+   *  version can be unresolvable until dsh has booted. */
+  let base: Record<string, string> | undefined;
+  const baseHeaders = (hostVersion: string | undefined): Record<string, string> => {
+    if (base) return base;
+    const headers = telemetryHeaders(telemetryIdentity(hostVersion ? { hostVersion } : {}));
+    return hostVersion ? (base = headers) : headers;
+  };
+
+  /** Put the current model on a live header map, or take it off. Core's merge
+   *  cannot clear a field, which would strand a stale model on a held client. */
+  const syncModel = (headers: Record<string, string>, model: string | undefined): void => {
+    const value = model ? telemetryHeaders({ model })[HEADER_AGENT_MODEL] : undefined;
+    if (value) headers[HEADER_AGENT_MODEL] = value;
+    else delete headers[HEADER_AGENT_MODEL];
+  };
 
   /**
    * `@honcho-ai/sdk` 2.4.0 caches its workspace get-or-create promise,
@@ -42,8 +66,20 @@ export function createGateway(config: ResolvedConfig): Gateway {
    */
   let honcho: Honcho | undefined;
   const client = async (): Promise<Honcho> => {
-    if (honcho) return honcho;
-    const fresh = new Honcho(clientOptions(config));
+    const { hostVersion, model } = telemetry();
+    // The SDK reads `defaultHeaders` per request, so writing to the held
+    // client's map is enough for the next request to carry the change.
+    if (honcho) {
+      const headers = honcho.http.defaultHeaders;
+      // A client built before the version resolved is missing the host header;
+      // once `base` is set this stops.
+      if (!base) Object.assign(headers, baseHeaders(hostVersion));
+      syncModel(headers, model);
+      return honcho;
+    }
+    const headers = { ...baseHeaders(hostVersion) }; // copy: syncModel must not touch `base`
+    syncModel(headers, model);
+    const fresh = new Honcho({ ...clientOptions(config), defaultHeaders: headers });
     await fresh.peer(config.peerName);
     return (honcho = fresh);
   };

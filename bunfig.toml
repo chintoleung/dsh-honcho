@@ -47,5 +47,6 @@ minimumReleaseAgeExcludes = [
   "@deepseek-ai/dsh-util-values",
   "@deepseek-ai/schemastery",
   "@honcho-ai/dsh-honcho",
+  "@honcho-ai/harness-plugin-core",
   "@honcho-ai/sdk"
 ]

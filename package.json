@@ -54,6 +54,7 @@
     "url": "git+https://github.com/plastic-labs/dsh-honcho.git"
   },
   "dependencies": {
+    "@honcho-ai/harness-plugin-core": "0.1.1",
     "@honcho-ai/sdk": "2.4.0"
   },
   "peerDependencies": {

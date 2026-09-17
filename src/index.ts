@@ -34,6 +34,7 @@ import {
   type ResolvedConfig,
 } from "./core-shim.js";
 import { createGateway, type Gateway } from "./honcho.js";
+import { hostVersion, modelFromSessionEvent, telemetryIdentity } from "./telemetry.js";
 import { createCapture, type Capture } from "./capture.js";
 import { DIRECTIVES, renderMemory } from "./memory.js";
 import { createTools } from "./tools.js";
@@ -134,7 +135,25 @@ export function apply(ctx: Context, config: Config = {}): void {
     return;
   }
 
-  const honcho = createGateway(resolved);
+  // ── telemetry ────────────────────────────────────────────────────────────
+
+  // Which model answered, per dsh session: global `session/event` listeners see
+  // subagent sessions too, so a subagent's model must not be reported for the
+  // parent's turn. `turnSession` is the session whose turn is being served.
+  const models = new Map<string, string>();
+  let turnSession: string | undefined;
+
+  ctx.on("session/event", (session: { id?: string }, event: unknown) => {
+    const model = modelFromSessionEvent(event);
+    if (model && session.id) models.set(session.id, model);
+  });
+
+  const telemetryFor = () => ({
+    hostVersion: hostVersion(),
+    ...(turnSession ? { model: models.get(turnSession) } : {}),
+  });
+
+  const honcho = createGateway(resolved, telemetryFor);
   const sessionNameFor = (cwd: string | undefined, dshSessionId?: string) =>
     sessionName(resolved, cwd, dshSessionId);
 
@@ -338,6 +357,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       next: () => Promise<PreStepDecision>,
     ): Promise<PreStepDecision> => {
       const [cwd, id] = sessionOf(payload.agent);
+      if (id) turnSession = id;
       const query = textOf(payload.messages);
       const stale = !lastFetchAt || Date.now() - lastFetchAt > refreshTtlMs;
       turnCount += 1;
@@ -418,6 +438,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         injectionActive: () => disposeMemory !== undefined,
         injectionSuppressed: () => suppressed,
         configFile: () => configPath(config.configPath),
+        telemetry: () => telemetryIdentity(telemetryFor()),
       }),
     );
   });
