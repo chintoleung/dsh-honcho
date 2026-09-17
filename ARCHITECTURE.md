@@ -287,7 +287,7 @@ version produced its data:
 | Header | Value | Where dsh exposes it |
 |---|---|---|
 | `X-Honcho-Host` | `dsh/0.1.5-rc.1 (darwin)` | Nowhere, directly. dsh's CLI reads its own `package.json` only to answer `--version`, and passes nothing to the plugin context, the environment, or the session log. The version is read back off the installation instead: `@deepseek-ai/dsh/package.json`, resolvable because `healProfilesModuleFallback()` symlinks the installation closure into `$DSH_HOME/profiles/node_modules`, which is on a plugin's resolution path. `@deepseek-ai/dsh-session` (lockstep-versioned) is the fallback for a packaged executable, which writes ESM proxies and skips a package with no importable entry. |
-| `X-Honcho-Plugin` | `dsh-honcho/0.1.0` | This package's own `package.json`, read lazily and guarded so a bad relative path cannot stop the plugin loading. |
+| `X-Honcho-Plugin` | `dsh-honcho/0.1.1` | This package's own `package.json`, read lazily and guarded so a bad relative path cannot stop the plugin loading. |
 | `X-Honcho-Agent-Model` | `deepseek/deepseek-chat` | Durable session events: `assistant/message` carries the provenance of what the model actually produced, `request/header` names the configured model one request earlier and on every mid-session switch. Absent until one of them has been seen, and absent again on a turn for a session that has not. |
 
 The client is held across turns, so the model cannot be baked in at construction. `createGateway` takes an

@@ -1,18 +1,29 @@
 # Changelog
 
-## 0.1.0 — unreleased
-
-First release. Honcho memory for DeepSeek Harness, as a native Cordis plugin.
+## 0.1.1 — 2026-09-17
 
 **Telemetry.** Every Honcho request now carries `X-Honcho-Host` (`dsh/<harness version> (<platform>)`),
 `X-Honcho-Plugin` (`dsh-honcho/<version>`), and `X-Honcho-Agent-Model` (`<provider>/<model>`, once dsh has
-named one — which is one request before the first answer). The harness version is read off the installation — dsh exposes it to a plugin nowhere else —
-and the model from the durable session log, so a mid-session switch is reflected on the next request.
-`/honcho` shows the identity as a `client` line. Formatting comes from `@honcho-ai/harness-plugin-core`
-0.1.1, the first release a Node-hosted plugin can import.
+named one — which is one request before the first answer). The harness version is read off the installation,
+since dsh exposes it to a plugin nowhere else, and the model from the durable session log, so a mid-session
+switch is reflected on the next request. `/honcho` shows the identity as a `client` line. Formatting comes
+from `@honcho-ai/harness-plugin-core` 0.1.1, the first release a Node-hosted plugin can import.
 
-**Packaging.** `main` and the `.` export now point at a committed root `index.js` that forwards to
-the build in `lib/`, so catalogs that verify a plugin from its git tree can resolve the entry.
+**Session naming across machines.** `sessionStrategy: "git-remote"` names the session from the repo's `origin`
+URL, normalized to `host/owner/repo`, so one repo cloned on two machines is one session and two projects that
+share a folder name are not merged. Scheme, `user@`, credentials, a port, `.git` and scp-style `:` all fold
+away; an ssh `Host` alias spelled differently per machine is the one difference it cannot reconcile. It falls
+back to `per-directory` outside a repo, without an `origin`, or without git. `sessionPrefix` (default empty)
+puts a literal string such as `vps-` in front of every generated name; a name pinned in `sessions` is never
+prefixed.
+
+**Packaging.** `main` and the `.` export now point at a committed root `index.js` that forwards to the build
+in `lib/`, so catalogs that verify a plugin from its git tree can resolve the entry. This landed just after
+0.1.0 went to npm, so it reaches users for the first time here.
+
+## 0.1.0 — 2026-09-02
+
+First release. Honcho memory for DeepSeek Harness, as a native Cordis plugin.
 
 **Fixed.** `/honcho`, `/honcho config`, and `/honcho flush` failed with `handler must return a
 CommandResult`. Results now carry the `kind` discriminator dsh requires.
@@ -44,19 +55,12 @@ network failure fall out for free. Secrets are redacted before upload, extensibl
 now.
 
 **Configuration.** Reads the shared `~/.honcho/config.json` under `hosts.dsh`, so memory is shared
-with the other Honcho integrations. Six session-naming strategies, `<peer>-<dir>` by default to
+with the other Honcho integrations. Five session-naming strategies, `<peer>-<dir>` by default to
 match claude-honcho.
-
-**Session naming across machines.** `sessionStrategy: "git-remote"` names the session from the
-repo's `origin` URL, normalized to `host/owner/repo`, so one repo cloned on two machines is one
-session and two projects that share a folder name are not merged. It falls back to `per-directory`
-outside a repo, without an `origin`, or without git. `sessionPrefix` (default empty) puts a literal
-string such as `vps-` in front of every generated name; a name pinned in `sessions` is never
-prefixed.
 
 **Skill.** `honcho-memory`, served from the packaged skills directory.
 
-### Known limitations
+## Known limitations
 
 - Only the environment layer of the `ctx.credentials` seam is read, because config resolution is
   synchronous and `resolve()` is not. Set `HONCHO_API_KEY` or `auth.apiKey`.
