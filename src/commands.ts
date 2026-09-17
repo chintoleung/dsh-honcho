@@ -122,9 +122,6 @@ export function createCommand(config: ResolvedConfig, deps: CommandDeps): Comman
         `strategy     ${config.sessionStrategy}`,
         `capture      ${captureStatus(config, deps.capture())}`,
         `injection    ${deps.injectionActive() ? "active" : "inactive"} · last fetch ${ago(deps.lastFetchAt())}`,
-        // The telemetry headers are invisible in normal operation — nothing
-        // reads them back — so this line is the only way to see what this
-        // install is actually reporting without a proxy in front of it.
         `client       ${clientIdentity(deps.telemetry())}`,
       ];
       if (deps.injectionSuppressed()) {

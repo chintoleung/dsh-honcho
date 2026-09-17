@@ -137,11 +137,9 @@ export function apply(ctx: Context, config: Config = {}): void {
 
   // ── telemetry ────────────────────────────────────────────────────────────
 
-  // Which model answered, per dsh session. Global `session/event` listeners see
-  // subagent sessions too (ARCHITECTURE.md, "Subagents"), so this is a map
-  // rather than one running value: a subagent's model must not be reported for
-  // the parent's turn. `turnSession` is the session whose turn is currently
-  // being served, which is the turn every Honcho call below belongs to.
+  // Which model answered, per dsh session: global `session/event` listeners see
+  // subagent sessions too, so a subagent's model must not be reported for the
+  // parent's turn. `turnSession` is the session whose turn is being served.
   const models = new Map<string, string>();
   let turnSession: string | undefined;
 
