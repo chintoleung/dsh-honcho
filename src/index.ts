@@ -4,7 +4,7 @@
  * Everything here is wiring. The seam choices and their justification live in
  * ARCHITECTURE.md; the short version:
  *
- *   agent/session-start   materialize the Honcho session (emit — NOT awaited)
+ *   agent/created         materialize the Honcho session (emit — NOT awaited)
  *   agent/pre-step        fetch + register memory (waterfall — the only awaited
  *                         seam that runs before the first model request)
  *   session/event         capture user/assistant turns; flush on compaction
@@ -18,12 +18,18 @@ import type { Context } from "@deepseek-ai/cordis";
 // through declaration merging, so each package we touch must be imported for
 // its augmentation even though we call nothing from it directly.
 import type { PreStepDecision } from "@deepseek-ai/dsh-agent";
-import { createUserMessage } from "@deepseek-ai/dsh-llm";
+import { createUserMessage, type ContextFormed } from "@deepseek-ai/dsh-llm";
 import type {} from "@deepseek-ai/dsh-tools";
 import type {} from "@deepseek-ai/dsh-session";
 import type {} from "@deepseek-ai/dsh-system-prompt";
 import type {} from "@deepseek-ai/dsh-session-query";
 import type {} from "@deepseek-ai/dsh-commands";
+
+declare module "@deepseek-ai/dsh-llm" {
+  interface MessageSourceMap {
+    honcho: { kind: "honcho" } & ContextFormed;
+  }
+}
 import {
   loadConfig,
   sessionName,
@@ -342,12 +348,13 @@ export function apply(ctx: Context, config: Config = {}): void {
       });
   }
 
-  ctx.on("agent/session-start", (payload: { agent: AgentLike }) => {
+  ctx.on("agent/created", (payload: { agent: AgentLike }): undefined => {
     // Emit, not awaited — so this only starts the write that materializes the
     // session. The read that turn 1 depends on happens in pre-step below.
     void honcho.ensureSession(...sessionOf(payload.agent)).catch((e: unknown) => {
       log(`session setup failed: ${e instanceof Error ? e.message : String(e)}`);
     });
+    return undefined;
   });
 
   ctx.on(
@@ -403,7 +410,7 @@ export function apply(ctx: Context, config: Config = {}): void {
               ...decision.messages,
               createUserMessage({
                 content: [{ type: "text", text }],
-                source: { kind: "plugin", plugin: "honcho" },
+                source: { kind: "honcho" },
               }),
             ],
           };
